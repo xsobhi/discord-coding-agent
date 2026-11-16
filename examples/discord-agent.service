@@ -1,0 +1,27 @@
+# systemd unit (user or system). Copy it, replace the three placeholders, then:
+#   sudo cp discord-agent.service /etc/systemd/system/ && sudo systemctl daemon-reload
+#   sudo systemctl enable --now discord-agent
+#
+# Notes:
+# - Restart=always matters: the agent's restart_self tool makes the bot exit cleanly (status 0) after
+#   its current task, and systemd must bring it back. "on-failure" would leave it stopped.
+# - Do NOT add EnvironmentFile=.env. The bot reads .env itself so that the agent's shell never
+#   inherits the Discord token.
+# - The agent's shell inherits PATH from here, so it must include the directories of `claude` and
+#   `codex` (for example ~/.npm-global/bin or ~/.local/bin).
+[Unit]
+Description=Discord coding agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=YOUR_USER
+WorkingDirectory=/path/to/discord-coding-agent
+Environment=PATH=/home/YOUR_USER/.npm-global/bin:/home/YOUR_USER/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/node src/index.ts
+Restart=always
+RestartSec=3
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

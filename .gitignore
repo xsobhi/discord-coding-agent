@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.*
+!.env.example
+data/
+instructions.md
+guest-instructions.md
+*.log
+__pycache__/
