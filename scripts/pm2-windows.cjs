@@ -28,6 +28,8 @@ const done = () => pm2.disconnect();
 pm2.Client.pingDaemon((alive) => {
   if (command === 'run' && alive) return done();
   if (command !== 'run' && !alive) return fail(new Error(`The PM2 runtime for ${name} is not running`));
+  // Patch the God.js of the very PM2 this launcher loaded (next to its API.js).
+  if (command === 'run') require('./pm2-windows-guard.cjs')(require(path.join(path.dirname(lib), 'God.js')));
   pm2.connect((err) => {
     if (err) return fail(err);
     if (command === 'run') {

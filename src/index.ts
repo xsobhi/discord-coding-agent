@@ -13,6 +13,10 @@ import { setOwnerLabels, setShutdown, trackActivity } from './tasks/lifecycle.ts
 import { noticeInterrupted, shutdownAll } from './tasks/registry.ts';
 import { startGuestCleanup } from './guests/cleanup.ts';
 import { startScheduledWakes } from './tasks/scheduled-wake.ts';
+import { acquireInstance } from './runtime/single-instance.ts';
+
+// Acquire before loading/writing shared task state or connecting to Discord.
+const instance = await acquireInstance(config.clientId);
 
 // mcp__discord is allow-listed on purpose (send_message gates itself), so this warning is expected.
 process.removeAllListeners('warning');
@@ -29,6 +33,7 @@ setInterval(() => void refreshKnownSecrets(config.secretScanDirs), 10 * 60_000).
 const client = createClient();
 
 client.once(Events.ClientReady, async (ready) => {
+  instance.ready();
   log.info(`logged in as ${ready.user.tag}; owners ${[...config.owners].join(', ')}`);
   const labels: string[] = [];
   for (const id of config.owners) {
@@ -67,6 +72,7 @@ const shutdown = async (reason: string): Promise<void> => {
   await shutdownAll();
   flushStore();
   await client.destroy();
+  await instance.close().catch(() => undefined);
   process.exit(0);
 };
 setShutdown(shutdown);

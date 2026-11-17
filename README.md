@@ -413,6 +413,10 @@ State lives in `AGENT_DATA_DIR` (gitignored): `tasks.json` maps each thread to i
 `settings.json` holds the default engine, model and effort, `work/<task>/` holds downloaded attachments (up to 200 MB
 each, streamed to disk), and the schedule files described above.
 
+## Only one instance
+
+The bot takes a lock keyed on its Discord client id before it loads state or logs in, and refuses to start if another copy already owns it. On Windows, `scripts/pm2-windows.cjs` also patches a PM2 7.0.1 restart race (a late exit from an old process made PM2 spawn extra copies); if your PM2 lacks the internals it patches, the guard logs a warning and leaves PM2 alone.
+
 ## Cost
 
 The bot itself is free and has no database or hosted service. The cost is whatever the engines use:
@@ -451,6 +455,10 @@ summary. Your own notes go in `instructions.md`, which is appended.
 
 **Does it work in Docker?** There is no Dockerfile and it has not been tried. The agent works on the machine it runs
 on, so a container only sees what you mount into it.
+
+## Troubleshooting
+
+**`Another instance already owns this Discord bot; refusing to log in`**: another copy of the bot with the same token is already running (for example under PM2, a service or another terminal). Stop it and start again. The lock is released automatically when that process exits or crashes.
 
 ## Limitations
 
