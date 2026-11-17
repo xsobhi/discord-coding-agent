@@ -4,7 +4,7 @@
 // ask = a question pings the guest and takes a typed answer.
 // Run from the repo: AGENT_DATA_DIR=/tmp/guest-harness AGENT_GUEST_USERS=<id> GUEST=<id> node scripts/guest-harness.mts [init,probe,files,ask]
 import { existsSync, rmSync } from 'node:fs';
-const SRC = new URL('../src', import.meta.url).pathname;
+const SRC = new URL('../src', import.meta.url).href;
 if (!process.env.AGENT_DATA_DIR) throw new Error('set AGENT_DATA_DIR: the harness must not write the live data/tasks.json');
 const GUEST = process.env.GUEST ?? '';
 if (!GUEST || !process.env.AGENT_GUEST_USERS?.includes(GUEST)) throw new Error('set GUEST and include it in AGENT_GUEST_USERS');

@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { parseEnv } from 'node:util';
 import { log, errorText } from '../log.ts';
+import { windowsEnvFiles } from './env-files.ts';
 
 // Everything the bot posts passes through here. Threads are visible to the
 // whole server, so a stray `cat .env` in a reply must not leak anything.
@@ -42,11 +43,12 @@ export async function refreshKnownSecrets(dirs: string[]): Promise<void> {
 function looksSecret(value: string): boolean {
   const v = value.trim();
   if (v.length < 12 || /\s/.test(v)) return false;
-  if (/^(https?:\/\/[^@]*|\/[\w./-]*|[\w.-]+\.(com|net|io|org)|true|false)$/i.test(v)) return false;
+  if (/^(https?:\/\/[^@]*|\/[\w./-]*|[a-z]:[\\/][^\s]*|[\w.-]+\.(com|net|io|org)|true|false)$/i.test(v)) return false;
   return /[0-9]/.test(v) && /[a-zA-Z]/.test(v);
 }
 
 function findEnvFiles(dirs: string[]): Promise<string[]> {
+  if (process.platform === 'win32') return windowsEnvFiles(dirs);
   const args = [...dirs, '-maxdepth', '5', '-name', 'node_modules', '-prune', '-o', '-type', 'f',
     '(', '-name', '.env', '-o', '-name', '.env.*', ')', '-print'];
   return new Promise((resolve) =>

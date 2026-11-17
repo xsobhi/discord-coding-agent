@@ -1,3 +1,4 @@
+import { basename } from 'node:path';
 import { ChannelType, type Message } from 'discord.js';
 import { config } from '../config.ts';
 import { mentionsMe } from './addressing.ts';
@@ -48,7 +49,7 @@ export async function gatherContext(message: Message, taskId: string): Promise<R
 }
 
 export const heardLine = (t: Transcript): string =>
-  `\n  [transcript of ${t.path.split('/').pop()} (${t.note}): ${t.text ? JSON.stringify(t.text) : '(no speech)'}]`;
+  `\n  [transcript of ${basename(t.path)} (${t.note}): ${t.text ? JSON.stringify(t.text) : '(no speech)'}]`;
 
 async function fetchReplied(message: Message): Promise<Message | undefined> {
   if (!message.reference?.messageId) return undefined;

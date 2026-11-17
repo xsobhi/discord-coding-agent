@@ -9,7 +9,7 @@ import { flushStore, loadStore } from './store.ts';
 import { warmCatalog } from './engines/catalog.ts';
 import { loadSettings } from './engines/settings.ts';
 import { registerCommands } from './discord/commands.ts';
-import { setOwnerLabels, trackActivity } from './tasks/lifecycle.ts';
+import { setOwnerLabels, setShutdown, trackActivity } from './tasks/lifecycle.ts';
 import { noticeInterrupted, shutdownAll } from './tasks/registry.ts';
 import { startGuestCleanup } from './guests/cleanup.ts';
 import { startScheduledWakes } from './tasks/scheduled-wake.ts';
@@ -57,17 +57,23 @@ client.on(Events.InteractionCreate, (interaction) => {
 client.on(Events.Error, (err) => log.error('discord client', errorText(err)));
 
 let closing = false;
-const shutdown = (signal: string): void => {
+const shutdown = async (reason: string): Promise<void> => {
   if (closing) return;
   closing = true;
-  log.info(`${signal}: closing sessions`);
-  shutdownAll();
+  log.info(`${reason}: closing sessions`);
+  // Closing waits for each engine process to really exit (so a restart can resume its conversation);
+  // the supervisor's kill timeout is 8 seconds, so give up a little before it.
+  setTimeout(() => process.exit(1), 7000).unref();
+  await shutdownAll();
   flushStore();
-  void client.destroy();
-  setTimeout(() => process.exit(0), 1500);
+  await client.destroy();
+  process.exit(0);
 };
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
+setShutdown(shutdown);
+process.on('SIGINT', () => void shutdown('SIGINT'));
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+// Windows has no SIGTERM for PM2 to send: with `shutdown_with_message` it sends this message instead.
+process.on('message', (message) => { if (message === 'shutdown') void shutdown('PM2 shutdown'); });
 process.on('unhandledRejection', (err) => log.error('unhandled rejection', errorText(err)));
 
 await client.login(config.token);

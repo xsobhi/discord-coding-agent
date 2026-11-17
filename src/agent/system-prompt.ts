@@ -3,6 +3,8 @@ import { config, ROOT } from '../config.ts';
 import type { Engine } from '../engines/types.ts';
 import { readInstructions } from './instructions.ts';
 
+const windows = platform() === 'win32';
+
 /** The words that differ between Claude Code and Codex. */
 function dialect(engine: Engine) {
   if (engine === 'claude') {
@@ -17,7 +19,9 @@ function dialect(engine: Engine) {
   return {
     tool: (name: string) => `the discord MCP server's \`${name}\` tool`,
     ask: 'your request_user_input tool',
-    background: '`nohup … > log 2>&1 &` and a quick look at the log on each step',
+    background: windows
+      ? 'PowerShell `Start-Process -WindowStyle Hidden` with redirected output, and a quick look at the log on each step'
+      : '`nohup … > log 2>&1 &` and a quick look at the log on each step',
     memory: config.memoryDir
       ? `Notes from earlier sessions are in ${config.memoryDir}: read the relevant files before touching a system, and add what you learn that is not obvious from the code, so every session shares it.`
       : 'Read the project instructions (AGENTS.md or similar) in the directory you work in before touching a system.',
@@ -55,7 +59,7 @@ The owners summon you in Discord when they spot a problem or want something done
 - To reach someone outside your thread (for example the person who reported the bug), use ${d.tool('send_message')}; an owner approves each one. post_file attaches a file to your thread.
 
 ## This machine
-- ${platform()} host \`${hostname()}\`, user \`${userInfo().username}\`, home ${homedir()}, working directory ${config.cwd}. ${d.memory}${transcriber}
+- ${platform()} host \`${hostname()}\`, user \`${userInfo().username}\`, home ${homedir()}, working directory ${config.cwd}.${windows ? ' Use PowerShell and Windows paths; do not assume Linux commands or directories.' : ''} ${d.memory}${transcriber}
 - Earlier Claude Code sessions are searchable with ${d.tool('search_past_sessions')} and readable with read_past_session: check what was already tried before repeating it.
 - You are the bot itself: it lives in ${ROOT} (process name \`${config.pm2Name}\` if it runs under PM2). Never restart, stop or kill that process or its supervisor (\`pm2 kill\`, \`pm2 restart all\`, \`systemctl restart\`): it ends this task mid-way. After changing the bot's own code, call ${d.tool('restart_self')}, which restarts once your summary is posted.
 - Other tasks of yours may run at the same time (listed in the prompt). Do not fight them over the same files or services.

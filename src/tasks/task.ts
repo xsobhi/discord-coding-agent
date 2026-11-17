@@ -15,6 +15,7 @@ import { answerOrigin, MARK, type Outcome } from './origin.ts';
 import { makeSink } from './sink.ts';
 import { StatusBoard } from './status.ts';
 import { retitle } from './title.ts';
+import { SessionSlot } from './session-slot.ts';
 
 /**
  * One request = one thread. Each turn runs on the task's engine (Claude Code
@@ -29,10 +30,8 @@ export class Task {
   private readonly client: Client;
   /** The message that started the task; it gets the "done" reply. */
   private origin?: Message;
-  private session?: EngineSession;
-  private opening?: Promise<EngineSession>;
-  /** Identifies the live session, so a closed one's late events are ignored. */
-  private generation = 0;
+  private readonly sessions = new SessionSlot();
+  private get session(): EngineSession | undefined { return this.sessions.current; }
   private current?: StatusBoard;
   private turnActive = false;
   private stoppedBy?: string;
@@ -53,7 +52,7 @@ export class Task {
   get busy(): boolean {
     return this.turnActive;
   }
-  get deploymentBusy(): boolean { return this.turnActive || this.idle.background > 0 || Boolean(this.opening); }
+  get deploymentBusy(): boolean { return this.turnActive || this.idle.background > 0 || this.sessions.busy; }
   board(): StatusBoard | undefined { return this.current; }
 
   /** An owner's message: it starts a turn, or queues until the agent can read it, as in the CLI. */
@@ -120,39 +119,23 @@ export class Task {
   }
 
   /** Ends the engine process; its session can still be resumed later. */
-  closeSession(): void {
-    this.generation++;
-    this.session?.close();
-    this.session = undefined;
-    this.opening = undefined;
+  closeSession(): Promise<void> {
+    return this.sessions.close();
   }
 
   private ensureSession(): Promise<EngineSession> {
-    if (this.session) return Promise.resolve(this.session);
-    if (this.opening) return this.opening;
     const engine = this.record.agent.engine;
-    const generation = ++this.generation;
-    const sink = makeSink(this, engine, () => generation === this.generation);
-    this.opening = openSession(engine, {
+    return this.sessions.ensure((live) => openSession(engine, {
       client: this.client, channel: this.channel, threadId: this.record.threadId, taskId: this.record.id,
       owners: ownerLabels(), resume: this.record.sessions[engine], requestRestart,
       driver: () => this.driver ?? this.record.ownerId, retitle: (title) => retitle(this.channel, this.record, title),
-      sink, guest: guestFor(this.record, this.client),
-    }, activeChoice(this.record.agent)).then((session) => {
-      if (generation === this.generation) this.session = session;
-      else session.close();
-      this.opening = undefined;
-      return session;
-    }, (err) => {
-      this.opening = undefined;
-      throw err;
-    });
-    return this.opening;
+      sink: makeSink(this, engine, live), guest: guestFor(this.record, this.client),
+    }, activeChoice(this.record.agent)));
   }
 
   /** Called by the live session's sink when its process is gone. */
   async sessionClosed(crash?: string): Promise<void> {
-    this.session = undefined;
+    this.sessions.current = undefined;
     this.idle.background = 0;
     this.inbox.dropAll();
     if (crash && this.turnActive) {

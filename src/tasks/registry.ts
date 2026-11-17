@@ -9,6 +9,7 @@ import { log } from '../log.ts';
 import { setBusyCheck } from './lifecycle.ts';
 import type { OtherTask } from './prompt.ts';
 import { Task } from './task.ts';
+import { bindContinuation } from './continuation.ts';
 
 const live = new Map<string, Task>();
 setBusyCheck(() => [...live.values()].some((t) => t.deploymentBusy));
@@ -34,6 +35,7 @@ export function newTask(client: Client, origin: Message, venue: Venue, title: st
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
+  bindContinuation(record);
   saveRecord(record);
   const task = new Task(client, record, venue.channel, origin);
   live.set(venue.threadId, task);
@@ -94,6 +96,7 @@ export async function noticeInterrupted(client: Client): Promise<void> {
   }
 }
 
-export function shutdownAll(): void {
-  for (const task of live.values()) task.closeSession();
+export async function shutdownAll(): Promise<void> {
+  // Failures are logged by the session slot; one stuck process must not stop the others closing.
+  await Promise.allSettled([...live.values()].map((task) => task.closeSession()));
 }

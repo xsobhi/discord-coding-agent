@@ -57,7 +57,7 @@ function render(message: unknown): string {
 
 function grepTranscripts(query: string): Promise<string[]> {
   return new Promise((resolve) => {
-    execFile('grep', ['-rliF', '--include=*.jsonl', '--', query, PROJECTS], { timeout: 45_000, maxBuffer: 16 << 20 },
+    execFile('grep', ['-rliF', '--include=*.jsonl', '--', query, PROJECTS], { timeout: 45_000, maxBuffer: 16 << 20, windowsHide: true },
       (_err, out) => resolve(String(out ?? '').split('\n').filter(Boolean).slice(0, 400).map((p) => basename(p, '.jsonl'))));
   });
 }

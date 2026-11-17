@@ -1,6 +1,7 @@
 import { errorText, log } from '../log.ts';
 import { claudeModels } from './claude/models.ts';
 import { codexModels } from './codex/models.ts';
+import { getDefaults } from './settings.ts';
 import type { Engine } from './types.ts';
 
 export type EffortOption = { value: string; description: string };
@@ -31,10 +32,9 @@ export async function listModels(engine: Engine): Promise<ModelOption[]> {
   return pending;
 }
 
-/** Warm both lists at startup so the first /model answers inside Discord's 3 seconds. */
+/** Warm the default engine's list at startup so the first /model answers inside Discord's 3 seconds; the other is fetched on demand. */
 export function warmCatalog(): void {
-  void listModels('claude');
-  void listModels('codex');
+  void listModels(getDefaults().engine);
 }
 
 export function cachedModels(engine: Engine): ModelOption[] {

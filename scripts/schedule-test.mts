@@ -68,7 +68,7 @@ try {
   console.log('ok  durable deduplication, busy deferral, hot pause and fail-closed receipts');
 
   // Real dispatch routing with a fake task/channel: no Discord network or live task records.
-  const SRC = new URL('../src', import.meta.url).pathname;
+  const SRC = new URL('../src', import.meta.url).href;
   let allowed = true, busy = false, count = 0, author = owner, bot = false, closed = false;
   let sends = 0;
   const record = { ownerId: owner, state: 'idle', guildId: '100000000000000004' };

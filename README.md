@@ -116,17 +116,30 @@ credentials in that user's home that you would not hand the agent, and `auto` mo
 
 Report vulnerabilities privately, as described in [SECURITY.md](SECURITY.md).
 
+## Platforms
+
+- **Linux (Claude Code and Codex).** Developed and run on Ubuntu (arm64) with both engines.
+- **Windows (tested with Codex).** The author runs an instance on a Windows 10 Pro / Windows Server machine
+  (Node 26) with the Codex engine, started at boot by a Scheduled Task and supervised by PM2, as an elevated
+  administrator on a dedicated build server. That instance ran Codex with no approvals and no sandbox (what
+  `AGENT_PERMISSION_MODE=bypass` does); Codex's own Windows sandbox in `auto` mode has not been tried. The Claude Code
+  engine, guests with the Modal file sandbox, and voice-message transcription have not been tried on Windows. The
+  offline test suite (`npm run check`, `npm test`) passes on both platforms.
+- macOS and Docker: untested.
+
+Setup for Windows is in [Windows](#windows).
+
 ## Requirements
 
-- Linux. It is developed and run on Ubuntu (arm64). Other Unix-likes may work; Windows is not supported. The secret
-  scan and the session search shell out to `find` and `grep`.
+- Linux or Windows (see [Platforms](#platforms)). On Linux the secret scan and the transcript search shell out to
+  `find` and `grep`.
 - Node.js 22.18 or newer (the bot runs as plain TypeScript through Node's type stripping, with no build step).
 - A Discord account that can create an application.
 - **Claude Code** credentials for the user that runs the bot. The Agent SDK ships its own Claude binary; it finds
   your login in `~/.claude` (run `claude` once and sign in) or an `ANTHROPIC_API_KEY` in the environment the bot is
   started from.
-- Optional, for the Codex engine: the `codex` CLI on `PATH`, signed in (`codex login`). If it is missing the bot logs a
-  warning at startup and the Codex options are simply empty.
+- Optional, for the Codex engine: the `codex` CLI on `PATH` (or `AGENT_CODEX_BIN`), signed in (`codex login`). If it is
+  missing the bot logs a warning when it first needs Codex's model list and the Codex options are simply empty.
 - Optional: `ffmpeg` and `ffprobe` for voice messages; PM2 or systemd to keep it running; a Modal account for the
   two optional Modal apps.
 
@@ -162,6 +175,58 @@ Report vulnerabilities privately, as described in [SECURITY.md](SECURITY.md).
    or `export` it, because the child processes would then inherit the bot token.
 
 To update: `git pull && npm ci`, then restart the process. There is no built-in auto-update.
+
+### Windows
+
+1. **Install Node.js** 22.18 or newer (nodejs.org) and Git. Install PM2 globally: `npm i -g pm2`.
+2. **Sign the engines in as the Windows user that will run the bot**: `codex login` (and `claude`, if you use it).
+   The logins live in that user's profile, so the boot task in step 6 must run as the same user.
+3. **Get the code**: `git clone <this repository>`, `npm ci`, then copy `.env.example` to `.env` and fill in the
+   three required values, as in [Setup](#setup) steps 1 to 4.
+4. **Point the bot at Codex** in `.env`:
+   - `AGENT_ENGINE=codex` makes Codex the default engine for new tasks (Claude Code stays the default otherwise).
+   - `AGENT_CODEX_BIN` is the full path to the native `codex.exe`. A bare `codex` does not work on Windows: npm only
+     installs a `codex.cmd` shim, which Node cannot start without a shell, and the bot needs the real process so it can
+     wait for it to exit. Find it with
+     `Get-ChildItem "$(npm root -g)\@openai" -Recurse -Filter codex.exe`. Write it without quotes or in single quotes: in
+     double quotes `.env` turns the `\n` of `\npm` into a newline (forward slashes work too).
+5. **Try it in the foreground**: `npm start`, as in Setup step 6. Stop it with Ctrl+C.
+6. **Run it under PM2 at boot.** `scripts/start-pm2-windows.ps1` starts a PM2 runtime that belongs to this bot alone
+   (`ecosystem.windows.config.cjs`, PM2 home in `data/pm2`, its own named pipes, so it never attaches to another PM2
+   on the machine) and stays alive while it runs. Register it as a Scheduled Task (PowerShell as the user from step 2;
+   paste the whole block; it asks for that user's password so the task also runs while nobody is logged in):
+   ```powershell
+   $repo = 'C:\path\to\discord-coding-agent'
+   $action = New-ScheduledTaskAction -Execute 'powershell.exe' -WorkingDirectory $repo `
+     -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$repo\scripts\start-pm2-windows.ps1`""
+   $trigger = New-ScheduledTaskTrigger -AtStartup
+   $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 `
+     -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew -StartWhenAvailable `
+     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+   $cred = Get-Credential "$env:USERDOMAIN\$env:USERNAME"
+   Register-ScheduledTask -TaskName 'discord-coding-agent' -Action $action -Trigger $trigger -Settings $settings `
+     -User $cred.UserName -Password $cred.GetNetworkCredential().Password -RunLevel Highest
+   Start-ScheduledTask -TaskName 'discord-coding-agent'
+   ```
+   `-ExecutionTimeLimit 0` matters: the default stops a task after 72 hours. If `node.exe` is not on the task's PATH, add
+   `-Node C:\path\to\node.exe` to the arguments.
+7. **Manage it** from the repository with `node scripts\pm2-windows.cjs status`, `restart` or `stop` (not the plain
+   `pm2` command, which talks to a different PM2). `node scripts\pm2-windows.cjs run` starts the runtime in the
+   current console. Logs and `startup-identity.json` (which user the task really ran as, and whether elevated) are in
+   `data\pm2`. The agent's `restart_self` works as on Linux: the bot closes its sessions and exits, and PM2 starts it
+   again. PM2 has no SIGTERM on Windows, so `ecosystem.windows.config.cjs` sets `shutdown_with_message` and the bot
+   closes cleanly when PM2 sends it a `shutdown` message.
+
+**Elevated or not.** `-RunLevel Highest` gives the task a full administrator token instead of the filtered one, and
+everything the agent runs inherits it. The bot does not need that. It is useful when the agent has to do administrator
+things (install software, manage services, write under `Program Files`), as on the author's build server. Drop
+`-RunLevel Highest` for a normal-rights task; the author has only run it elevated, so that is untested, though nothing
+in the code requires administrator rights. `-RequireAdmin` on the start script refuses to start when it is not
+elevated. Whichever you pick, read [Security model](#security-model-and-its-limits): owners get the rights of that user.
+
+On Windows the secret scan walks `.env` files itself (5 levels deep, skipping `node_modules`, `.git` and `AppData`),
+and `search_past_sessions` with `deep=true` needs a `grep` on `PATH` (for example the one that comes with Git for
+Windows); without it only titles and first prompts are searched.
 
 ## Using it
 
@@ -280,6 +345,31 @@ it within the grace period, then skips it. Downtime does not queue a backlog. A 
 `data/schedule-runs.json` before delivery so a restart cannot run an occurrence twice; an ambiguous failure is marked
 `failed` and needs a look rather than a replay. `data/schedule-health.json` shows the next wake-ups.
 
+## Continuing an existing Codex conversation
+
+To pick up a Codex conversation you started elsewhere (in a terminal, say) from Discord, write
+`data/pending-continuation.json` before the owner starts a new task in a server:
+
+```json
+{
+  "codexThreadId": "019a0000-0000-7000-8000-000000000000",
+  "ownerId": "123456789012345678",
+  "title": "Existing conversation",
+  "model": "gpt-6-astra",
+  "effort": "high"
+}
+```
+
+`codexThreadId` is the id in the conversation's file name under `~/.codex/sessions` (`rollout-<time>-<id>.jsonl`). The
+first task that this owner starts in a server (a new thread the bot creates, not a DM) takes the conversation over: the
+task runs on Codex with that model and resumes that exact conversation. The file is then marked as used and is never
+applied twice, even across a restart. A reply in that thread continues the same conversation.
+
+Resuming never starts a replacement chat behind your back: if the saved conversation cannot be resumed, or Codex
+answers with a different one, the task reports an error. When another Codex process still holds the conversation
+("already has an active writer"), the bot retries for about 16 seconds first, which covers the previous process
+finishing its exit after a restart.
+
 ## Configuration reference
 
 All variables live in `.env` (see `.env.example`, which has the full comments). Any `AGENT_*` variable set in the real
@@ -303,6 +393,8 @@ Path settings accept `~/` for your home directory, and relative paths start from
 | `AGENT_CWD` | home directory | where the agent starts |
 | `AGENT_INSTRUCTIONS_FILE` | `./instructions.md` | your notes for the agent |
 | `AGENT_MEMORY_DIR` | none | notes directory Codex is pointed at |
+| `AGENT_ENGINE` | `claude` | `claude` or `codex`: the engine new tasks start on |
+| `AGENT_CODEX_BIN` | `codex` | the Codex executable: a name on `PATH` or a full path (required on Windows) |
 | `AGENT_MODEL` | account default | first-run Claude model |
 | `AGENT_CODEX_MODEL` | `gpt-6-astra` | first-run Codex model, if `~/.codex/config.toml` has none |
 | `AGENT_SECRET_SCAN_DIRS` | home directory | where `.env` files are collected for redaction |
@@ -350,7 +442,7 @@ restart.
 new tasks will fail until you switch the default to Codex with `/engine`.
 
 **Can the agent restart or update the bot?** It can ask for a restart with `restart_self`, which exits the process
-once every task is idle. Your supervisor (PM2 or systemd) must bring it back. It is told never to kill the process
+once every task is idle. Your supervisor (PM2, systemd, or the Windows PM2 scripts) must bring it back. It is told never to kill the process
 directly, because that would end the task it is running in.
 
 **Where is the system prompt?** `src/agent/system-prompt.ts` (owners) and `src/agent/guest-prompt.ts` (guests). It
@@ -362,14 +454,16 @@ on, so a container only sees what you mount into it.
 
 ## Limitations
 
-- Developed and run on Ubuntu Linux (arm64). Nothing else has been tested.
-- `npm test` is offline: it covers message splitting, redaction, routing, schedules and the file-size rule. It does not
+- Developed and run on Ubuntu Linux (arm64) with both engines; run on Windows with Codex only (see [Platforms](#platforms)).
+  Nothing else has been tested.
+- `npm test` is offline: it covers message splitting, redaction, routing, schedules, session and Codex-process
+  lifecycle, continuing an existing conversation, and the file-size rule. It does not
   talk to Discord or to a real engine. `scripts/harness.mts` and `scripts/guest-harness.mts` drive real sessions
   against a fake thread and need working Claude or Codex credentials.
 - It depends on the Claude Agent SDK and on `codex app-server`, whose protocol is still changing. The Codex question
   tool needs a feature flag the bot sets (`default_mode_request_user_input`) that Codex still labels experimental.
 - State is JSON files in `data/`, one bot process, no database and no clustering.
-- Codex's sandbox needs unprivileged user namespaces. Where the OS blocks them (for example Ubuntu's AppArmor
+- On Linux, Codex's sandbox needs unprivileged user namespaces. Where the OS blocks them (for example Ubuntu's AppArmor
   restriction), commands fall back to going through the automatic reviewer one by one.
 - A command that runs for a long time in the foreground holds back messages sent mid-task until it ends, because
   the engines read queued messages between steps. The system prompt tells the agent to keep commands short or run

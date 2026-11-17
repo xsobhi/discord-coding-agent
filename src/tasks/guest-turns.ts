@@ -1,3 +1,4 @@
+import { basename, isAbsolute } from 'node:path';
 import type { RequestContext } from '../discord/context.ts';
 import type { Transcript } from '../discord/transcribe.ts';
 import { quote, spoken } from './prompt.ts';
@@ -39,7 +40,7 @@ export function guestFollowUp(role: 'Guest' | 'Owner', author: string, text: str
 /** Attachments are handed over with the message; what could not be downloaded is said in words. */
 function attachmentNote(attachments: string[]): string[] {
   if (!attachments.length) return [];
-  const failed = attachments.filter((a) => !a.startsWith('/'));
-  const names = attachments.filter((a) => a.startsWith('/')).map((a) => a.split('/').pop());
+  const failed = attachments.filter((a) => !isAbsolute(a));
+  const names = attachments.filter((a) => isAbsolute(a)).map((a) => basename(a));
   return ['', `Attached (images and PDFs come as content, text files inline; these names are also make_files inputs, if you have it): ${names.join(', ')}`, ...failed];
 }

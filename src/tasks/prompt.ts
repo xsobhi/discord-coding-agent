@@ -1,3 +1,4 @@
+import { basename } from 'node:path';
 import type { RequestContext } from '../discord/context.ts';
 import type { Transcript } from '../discord/transcribe.ts';
 
@@ -48,7 +49,7 @@ export function followUpText(owner: string, text: string, attachments: string[],
 export function spoken(voice: Transcript[]): string[] {
   if (!voice.length) return [];
   const lines = ['', 'What they said in audio they sent (auto-transcribed: their own words, though names and numbers may be misheard):'];
-  for (const t of voice) lines.push(`${t.path.split('/').pop()} — ${t.note}:`, quote(t.text || '(no speech heard)'));
+  for (const t of voice) lines.push(`${basename(t.path)} — ${t.note}:`, quote(t.text || '(no speech heard)'));
   return lines;
 }
 

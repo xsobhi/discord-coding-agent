@@ -32,6 +32,6 @@ export async function codexModels(): Promise<ModelOption[]> {
     } while (cursor);
     return out;
   } finally {
-    rpc.close();
+    await rpc.close();
   }
 }

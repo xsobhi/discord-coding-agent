@@ -1,5 +1,5 @@
 import { readFileSync, statSync } from 'node:fs';
-import { basename, extname } from 'node:path';
+import { basename, extname, isAbsolute } from 'node:path';
 
 /**
  * A guest's agent has no Read tool, so the bot itself hands over what they
@@ -20,7 +20,7 @@ const MAX_TEXT = 100_000;
 /** Content blocks for the files the model can take, and a note for each it cannot. */
 export function inlineBlocks(paths: string[]): Block[] {
   const blocks: Block[] = [];
-  for (const path of paths.filter((p) => p.startsWith('/'))) {
+  for (const path of paths.filter((p) => isAbsolute(p))) {
     const name = basename(path).replace(/^\d+-/, '');
     const ext = extname(path).toLowerCase();
     let size = 0;

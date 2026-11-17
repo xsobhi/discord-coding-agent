@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isAbsolute } from 'node:path';
 import type { Client, Message } from 'discord.js';
 import { config, isOwner, isUndercover } from '../config.ts';
 import { saveAttachments } from '../discord/attachments.ts';
@@ -68,4 +69,4 @@ export async function continueTask(task: Task, message: Message, via?: string): 
 
 /** Saved image attachments, which Codex can take as image input (Claude Reads the paths). */
 const imagesOf = (paths: string[]): OwnerTurn['images'] =>
-  paths.filter((p) => p.startsWith('/') && /\.(png|jpe?g|gif|webp)$/i.test(p));
+  paths.filter((p) => isAbsolute(p) && /\.(png|jpe?g|gif|webp)$/i.test(p));

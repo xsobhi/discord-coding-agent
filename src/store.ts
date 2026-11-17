@@ -54,12 +54,13 @@ function migrate(r: TaskRecord): void {
   r.agent ??= { ...getDefaults(), engine: 'claude' };
 }
 
-function flush(): void {
+function flush(strict = false): void {
   timer = undefined;
   try {
     writeFileSync(`${file}.tmp`, JSON.stringify(records, null, 2));
     renameSync(`${file}.tmp`, file);
   } catch (err) {
+    if (strict) throw err;
     log.error('store write failed', errorText(err));
   }
 }
@@ -68,9 +69,9 @@ function scheduleFlush(): void {
   timer ??= setTimeout(flush, 300);
 }
 
-export function flushStore(): void {
+export function flushStore(strict = false): void {
   if (timer) clearTimeout(timer);
-  flush();
+  flush(strict);
 }
 
 export const getRecord = (threadId: string): TaskRecord | undefined => records[threadId];

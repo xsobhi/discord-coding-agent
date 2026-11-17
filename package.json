@@ -7,7 +7,7 @@
     "start": "node src/index.ts",
     "check": "tsc --noEmit",
     "lines": "node scripts/check-lines.ts",
-    "test": "node scripts/selftest.ts && node --no-warnings --experimental-test-module-mocks scripts/routing.mts && node --no-warnings --experimental-test-module-mocks scripts/schedule-test.mts && node scripts/check-lines.ts"
+    "test": "node scripts/selftest.ts && node --no-warnings --experimental-test-module-mocks scripts/routing.mts && node --no-warnings --experimental-test-module-mocks scripts/continuation-test.mts && node scripts/session-lifecycle-test.mts && node --no-warnings --experimental-test-module-mocks scripts/rpc-lifecycle-test.mts && node --no-warnings --experimental-test-module-mocks scripts/schedule-test.mts && node scripts/check-lines.ts"
   },
   "type": "module",
   "dependencies": {

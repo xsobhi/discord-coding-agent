@@ -1,7 +1,7 @@
 // Offline run of the real Task against a fake Discord thread and a real session (Claude haiku, or Codex with ENGINE=codex):
 // quick reply, queued message, the waiting note + Read now, a background job's own turn, a question ping.
 // Run from the repo: AGENT_DATA_DIR=/tmp/harness-data node scripts/harness.mts [quick,queue,readnow,background,ping,title]
-const SRC = new URL('../src', import.meta.url).pathname;
+const SRC = new URL('../src', import.meta.url).href;
 const { Task } = await import(`${SRC}/tasks/task.ts`);
 const { answerTyped } = await import(`${SRC}/agent/questions.ts`);
 const { setOwnerLabels } = await import(`${SRC}/tasks/lifecycle.ts`);

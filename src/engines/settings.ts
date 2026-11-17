@@ -10,7 +10,7 @@ let defaults: AgentSettings = initial();
 
 /** First run: copy what the terminal CLIs on this machine are set to. */
 function initial(): AgentSettings {
-  return { engine: 'claude', claude: fromClaudeSettings(), codex: fromCodexConfig() };
+  return { engine: config.engine, claude: fromClaudeSettings(), codex: fromCodexConfig() };
 }
 
 function fromClaudeSettings(): EngineChoice {
@@ -24,7 +24,7 @@ function fromClaudeSettings(): EngineChoice {
 
 function fromCodexConfig(): EngineChoice {
   try {
-    const toml = readFileSync(join(homedir(), '.codex', 'config.toml'), 'utf8');
+    const toml = readFileSync(join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'config.toml'), 'utf8');
     const top = toml.split(/^\[/m)[0] ?? '';
     const model = top.match(/^model\s*=\s*"([^"]+)"/m)?.[1];
     const effort = top.match(/^model_reasoning_effort\s*=\s*"([^"]+)"/m)?.[1];

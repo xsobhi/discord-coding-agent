@@ -59,6 +59,10 @@ export const config = {
   /** Where the agent starts. Defaults to your home directory. */
   cwd: path('AGENT_CWD', homedir()),
   model: env.AGENT_MODEL || undefined,
+  /** The engine new tasks start on until /engine changes it (the default is saved in data/settings.json). */
+  engine: env.AGENT_ENGINE === 'codex' ? ('codex' as const) : ('claude' as const),
+  /** How to start Codex: a name on PATH, or the full path to the executable (on Windows, the native codex.exe). */
+  codexBin: env.AGENT_CODEX_BIN?.trim() || 'codex',
   /** First-run Codex model when ~/.codex/config.toml names none; /model lists what your account offers. */
   codexModel: env.AGENT_CODEX_MODEL || 'gpt-6-astra',
   /**

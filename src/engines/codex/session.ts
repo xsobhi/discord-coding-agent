@@ -9,6 +9,7 @@ import { handleCodexEvent, type CodexTurnState } from './events.ts';
 import { guestThreadParams } from './guest.ts';
 import { exposeTools } from './mcp-http.ts';
 import { answerCodexRequest } from './requests.ts';
+import { resumeSavedThread } from './resume.ts';
 import { CodexRpc } from './rpc.ts';
 
 /**
@@ -39,7 +40,8 @@ export class CodexSession implements EngineSession {
 
   static async open(host: SessionHost, choice: EngineChoice): Promise<CodexSession> {
     const session = new CodexSession(host, choice);
-    await session.start();
+    try { await session.start(); }
+    catch (err) { await session.close(); throw err; }
     return session;
   }
 
@@ -76,11 +78,11 @@ export class CodexSession implements EngineSession {
     });
   }
 
-  close(): void {
+  async close(): Promise<void> {
     this.closing = true;
     this.abort.abort();
     this.removeTools();
-    this.rpc?.close();
+    await this.rpc?.close();
   }
 
   private async start(): Promise<void> {
@@ -112,12 +114,16 @@ export class CodexSession implements EngineSession {
     let res: { thread: { id: string } };
     try {
       res = host.resume
-        ? await this.rpc.call('thread/resume', { threadId: host.resume, excludeTurns: true, ...common })
+        ? await resumeSavedThread(this.rpc, host.resume, common,
+          () => host.sink.waiting('Waiting for the previous Codex writer to release this conversation…'), this.abort.signal)
         : await this.rpc.call('thread/start', common);
     } catch (err) {
       if (!host.resume) throw err;
-      log.warn(`could not resume codex thread ${host.resume}, starting fresh`, errorText(err));
-      res = await this.rpc.call('thread/start', common);
+      // A silent fresh chat would drop the conversation's context without anyone noticing.
+      throw new Error(`Could not resume the saved Codex conversation ${host.resume}; no replacement chat was created. ${errorText(err)}`);
+    }
+    if (host.resume && res.thread.id !== host.resume) {
+      throw new Error('Codex returned a different conversation; refusing to continue it.');
     }
     this.threadId = res.thread.id;
     host.sink.onSession(this.threadId, footer(this.choice, Boolean(guest)));

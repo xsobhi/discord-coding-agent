@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { realpathSync, statSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, join, sep } from 'node:path';
 import { config, ROOT } from '../config.ts';
 import { workDir } from '../discord/attachments.ts';
 
@@ -26,7 +26,7 @@ export function inputsFor(taskId: string, names: string[]): Input[] {
     if (!/^[\w.-]+$/.test(name)) throw new Error(`"${n}" is not an attached file name (use the names listed with their message).`);
     let path: string;
     try { path = realpathSync(join(dir, name)); } catch { throw new Error(`${name} is not attached in this task (or was cleaned up): ask them to send it again.`); }
-    if (!path.startsWith(`${dir}/`)) throw new Error(`${name} is not an attached file.`);
+    if (!path.startsWith(`${dir}${sep}`)) throw new Error(`${name} is not an attached file.`);
     if (statSync(path).size > MAX_INPUT) throw new Error(`${name} is over ${MAX_INPUT >> 20} MB.`);
     return { name, path };
   });
@@ -38,6 +38,7 @@ export function runInSandbox(code: string, inputs: Input[], timeoutSec: number):
     const child = spawn(config.modalPython, [RUNNER], {
       env: { PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: process.env.HOME ?? '/root', ...(config.modalProfile ? { MODAL_PROFILE: config.modalProfile } : {}) },
       stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
     });
     const out: Buffer[] = [];
     let size = 0;

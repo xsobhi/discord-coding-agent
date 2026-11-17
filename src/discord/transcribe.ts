@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename, isAbsolute, join } from 'node:path';
 import { promisify } from 'node:util';
 import { config, ROOT } from '../config.ts';
 import { errorText, log } from '../log.ts';
@@ -18,7 +18,7 @@ const AUTO_MAX_SECONDS = 10 * 60;
 export type Transcript = { path: string; text: string; note: string };
 type Heard = { text: string; language: string; duration: number };
 
-export const isSpeech = (path: string): boolean => path.startsWith('/') && SPEECH.test(path);
+export const isSpeech = (path: string): boolean => isAbsolute(path) && SPEECH.test(path);
 
 /** Transcripts of the speech-like files among saved attachments. Never throws: a failure is a note. */
 export const transcribeAll = (paths: string[]): Promise<Transcript[]> =>
@@ -71,6 +71,7 @@ async function viaHttp(path: string, length: number, lyrics: boolean): Promise<H
 async function viaLocal(path: string, length: number, lyrics: boolean): Promise<Heard> {
   const { stdout } = await run(config.whisperPython, ['-I', join(ROOT, 'scripts/whisper_local.py'), path, ...(lyrics ? ['--lyrics'] : [])], {
     timeout: Math.round(60_000 + length * 3_000),
+    windowsHide: true,
     maxBuffer: 16 << 20,
   });
   return JSON.parse(stdout) as Heard;
@@ -79,7 +80,7 @@ async function viaLocal(path: string, length: number, lyrics: boolean): Promise<
 /** Audio length from ffprobe; 0 when unknown (the transcriber decodes it anyway). */
 async function seconds(path: string): Promise<number> {
   try {
-    const { stdout } = await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path], { timeout: 10_000 });
+    const { stdout } = await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path], { timeout: 10_000, windowsHide: true });
     const n = Number.parseFloat(stdout);
     return Number.isFinite(n) ? n : 0;
   } catch {

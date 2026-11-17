@@ -1,9 +1,10 @@
 // Offline checks for the pure helpers: message splitting and secret redaction.
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chunk } from '../src/discord/chunk.ts';
+import { windowsEnvFiles } from '../src/discord/env-files.ts';
 import { redact } from '../src/discord/redact.ts';
 
 const code = '```ts\n' + Array.from({ length: 400 }, (_, i) => `const line${i} = ${i};`).join('\n') + '\n```';
@@ -25,6 +26,11 @@ const cases: [string, string][] = [
 ];
 for (const [input, leaked] of cases) assert.ok(!redact(input).includes(leaked), `redacts: ${redact(input)}`);
 assert.equal(redact('the token: expired yesterday'), 'the token: expired yesterday', 'prose stays readable');
+// The Windows secret scan (a stand-in for `find`): .env files a few levels down, none inside node_modules.
+const tree = mkdtempSync(join(tmpdir(), 'envscan-'));
+for (const dir of ['a/b', 'node_modules/x']) mkdirSync(join(tree, dir), { recursive: true });
+for (const f of ['.env', 'a/b/.env.local', 'node_modules/x/.env', 'a/notenv']) writeFileSync(join(tree, f), 'X=1');
+assert.deepEqual((await windowsEnvFiles([tree])).map((f) => f.slice(tree.length + 1)).sort(), ['.env', join('a', 'b', '.env.local')]);
 // Config: `~/` and relative paths resolve, and permissions default to the safer mode.
 const tmp = mkdtempSync(join(tmpdir(), 'selftest-'));
 writeFileSync(join(tmp, 'env'), 'DISCORD_TOKEN=offline\nDISCORD_CLIENT_ID=1\n');
@@ -35,4 +41,4 @@ assert.equal(config.guestHome, join(homedir(), 'g'));
 assert.equal(config.instructionsFile, join(ROOT, 'notes.md'));
 assert.equal(config.permissionMode, 'auto');
 
-console.log(`selftest ok: ${parts.length} chunks, ${cases.length} redaction cases, config paths`);
+console.log(`selftest ok: ${parts.length} chunks, ${cases.length} redaction cases, config paths, env scan`);

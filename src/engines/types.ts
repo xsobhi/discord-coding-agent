@@ -6,6 +6,8 @@ import type { StatusBoard } from '../tasks/status.ts';
 export type Engine = 'claude' | 'codex';
 export const ENGINES: Engine[] = ['claude', 'codex'];
 export const ENGINE_LABEL: Record<Engine, string> = { claude: 'Claude Code', codex: 'Codex' };
+/** Cleanup did not establish process exit; reopening must remain blocked. */
+export class SessionCleanupError extends Error {}
 
 export type EngineChoice = { model: string; effort?: string };
 
@@ -49,7 +51,7 @@ export interface EngineSession {
   /** Starts a turn, or queues it behind the running one; `onRead` says when the agent sees it. */
   send(turn: OwnerTurn, choice: EngineChoice): Promise<void>;
   interrupt(): Promise<void>;
-  close(): void;
+  close(): void | Promise<void>;
 }
 
 /** `guest`: the task belongs to a restricted user, so the engine runs sandboxed (see guests/guest.ts). */
